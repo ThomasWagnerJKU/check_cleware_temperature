@@ -1,0 +1,3 @@
+# Cleware USB-Temp (0d50:0010): let the monitoring user read/write /dev/usb/hiddevN (check_cleware_temp).
+# Adapt GROUP to the group of your monitoring core (e.g. nagios, naemon, or the OMD site name).
+SUBSYSTEM=="usbmisc", KERNEL=="hiddev*", ATTRS{idVendor}=="0d50", ATTRS{idProduct}=="0010", GROUP="monitoring", MODE="0660"

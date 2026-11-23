@@ -1,0 +1,3 @@
+check_cleware_temp
+*.o
+__pycache__/
