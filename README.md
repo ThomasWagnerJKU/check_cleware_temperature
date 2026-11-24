@@ -5,7 +5,7 @@ related types 0x11/0x15/humidity), plus a converter for the old **Cleware Contro
 (`*.cwc`).
 
 * `check_cleware_temp`: a small C++ program linked statically against Cleware's own
-  [USBaccess library](https://www.cleware-shop.de/Software-E/Linux) (GPL-3, included unchanged in
+  [USBaccess library](https://www.cleware-shop.de/Software-E/Linux) (GPL-3, included with one fix in
   [`cleware/`](cleware/)). It is one static binary with no runtime dependencies.
 * [`tools/cwc2influx.py`](tools/cwc2influx.py) converts Cleware Control 4.x `.cwc` logs to CSV or
   InfluxDB line protocol. The file format is described in
@@ -25,15 +25,19 @@ On openSUSE install `glibc-devel-static`; on Debian, `build-essential` is enough
 ```
 check_cleware_temp [-s serial] [-w range] [-c range] [-t timeout] [-d]
   -s serial   use the sensor with this serial number (decimal; default: first temperature sensor)
-  -w/-c range warning/critical range in degC, Nagios range syntax ([@]start:end, ~ = -inf)
+  -w/-c range warning/critical range in degC, Nagios range syntax ([@]start:end, ~ = -inf);
+              N alone means 0:N, so use ~:N for only an upper limit
   -t seconds  timeout (default 20)
   -d          debug output
 ```
 
 ```
-$ check_cleware_temp -s 1077 -w 29 -c 33
-TEMP OK - 27.00 C (Cleware USB-Temp serial 1077) | temperature=27.00;29;33
+$ check_cleware_temp -s 1077 -w ~:29 -c ~:33
+TEMP OK - 27.00 C (Cleware USB-Temp serial 1077) | temperature=27.00;~:29;~:33
 ```
+
+In the Nagios range syntax a plain `29` means 0 to 29, so `-w 29` would also warn below 0 °C;
+`~:29` only warns above 29 °C, `15:29` below 15 °C and above 29 °C.
 
 The serial is the USB serial number string read as hex: `0000435` → 0x435 = 1077. Run with `-d`
 to list all Cleware devices.
@@ -65,7 +69,7 @@ define service {
   service_description   Temperature Cleware USB-Temp
   host_name             myhost
   use                   generic-service
-  check_command         check_cleware_temp!1077!29!33
+  check_command         check_cleware_temp!1077!~:29!~:33
   check_interval        2
   retry_interval        2
 }
@@ -92,5 +96,8 @@ or restart the VM.
 ## License
 
 GPL-3.0-only, see [LICENSE](LICENSE), the same license as Cleware's USBaccess library. The files in
-[`cleware/`](cleware/) are © Cleware GmbH, taken unchanged from `Linux_Ubuntu.zip` (USBaccess 6.6.3,
-2023-08-02).
+[`cleware/`](cleware/) are © Cleware GmbH, from `Linux_Ubuntu.zip` (USBaccess 6.6.3, 2023-08-02).
+They are unchanged except for one fix in `cwOpenCleware()` in `USBaccessBasic.c` (marked with a
+comment): the library looked for the devices in `/dev/bus/usb/hiddevN` instead of `/dev/usb/hiddevN`
+as soon as `/dev/usb/hiddev0` could not be opened, e.g. because it is a UPS only root may open, and
+then did not find the sensor. It now uses `/dev/usb` whenever that directory exists.

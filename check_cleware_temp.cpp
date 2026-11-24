@@ -5,7 +5,8 @@
 // https://github.com/ThomasWagnerJKU/check_cleware_temperature
 //
 // check_cleware_temp [-s serial] [-w range] [-c range] [-t timeout] [-d]
-// Ranges use Nagios plugin syntax: [@]start:end, "~" = -infinity, "N" = 0:N.
+// Ranges use Nagios plugin syntax: [@]start:end, "~" = -infinity, "N" = 0:N
+// (so an upper limit alone is "~:N", else temperatures below 0 alert too).
 //
 // SPDX-License-Identifier: GPL-3.0-only (like Cleware's USBaccess, which it links)
 // Copyright (C) 2026 Thomas Wagner
@@ -34,7 +35,7 @@ static bool parseRange(const char *s, Range &r) {
 	char *end;
 	if (!colon) {
 		r.hi = strtod(s, &end);
-		return end != s && *end == 0;
+		return end != s && *end == 0 && r.lo <= r.hi;
 	}
 	if (s[0] == '~' && s + 1 == colon) r.lo = -INFINITY;
 	else {
@@ -61,10 +62,20 @@ static void onAlarm(int) {
 	_exit(UNKNOWN);
 }
 
+// a whole number from min to max, or false
+static bool parseInt(const char *s, long min, long max, int &v) {
+	char *end;
+	long l = strtol(s, &end, 10);
+	if (end == s || *end != 0 || l < min || l > max) return false;
+	v = (int)l;
+	return true;
+}
+
 static void usage() {
 	printf("check_cleware_temp [-s serial] [-w range] [-c range] [-t timeout] [-d]\n"
 	       "  -s serial   use the sensor with this serial number (default: first temperature sensor)\n"
-	       "  -w/-c range warning/critical range in degC, Nagios syntax ([@]start:end, ~ = -inf)\n"
+	       "  -w/-c range warning/critical range in degC, Nagios syntax ([@]start:end, ~ = -inf);\n"
+	       "              N alone means 0:N, so use ~:N for only an upper limit\n"
 	       "  -t seconds  timeout (default 20)\n"
 	       "  -d          debug output\n");
 }
@@ -74,16 +85,16 @@ int main(int argc, char *argv[]) {
 	Range warn, crit;
 	while ((opt = getopt(argc, argv, "s:w:c:t:dh")) != -1) {
 		switch (opt) {
-		case 's': serial = atoi(optarg); break;
+		case 's': if (!parseInt(optarg, 0, 0x7fffffff, serial)) { printf("TEMP UNKNOWN - invalid serial '%s'\n", optarg); return UNKNOWN; } break;
 		case 'w': if (!parseRange(optarg, warn)) { printf("TEMP UNKNOWN - invalid warning range '%s'\n", optarg); return UNKNOWN; } break;
 		case 'c': if (!parseRange(optarg, crit)) { printf("TEMP UNKNOWN - invalid critical range '%s'\n", optarg); return UNKNOWN; } break;
-		case 't': timeout = atoi(optarg); break;
+		case 't': if (!parseInt(optarg, 1, 3600, timeout)) { printf("TEMP UNKNOWN - invalid timeout '%s'\n", optarg); return UNKNOWN; } break;
 		case 'd': debug = 1; break;
 		default: usage(); return UNKNOWN;
 		}
 	}
 	signal(SIGALRM, onAlarm);
-	alarm(timeout > 0 ? timeout : 20);
+	alarm(timeout);
 
 	CUSBaccess cw;
 	int count = cw.OpenCleware();
@@ -107,7 +118,8 @@ int main(int argc, char *argv[]) {
 	int sn = cw.GetSerialNumber(dev);
 
 	// The sensor measures continuously and sets a valid bit; read until a valid value
-	// arrives, reset the sensor once if it does not (like Cleware's USBtemp).
+	// arrives, reset the sensor once if it does not (like Cleware's USBtemp). The
+	// library checks the valid bit, so 0.0 is a real reading.
 	double t = 0; int timeID = 0; bool ok = false;
 	for (int attempt = 0; attempt < 2 && !ok; attempt++) {
 		if (attempt) {
@@ -116,7 +128,7 @@ int main(int argc, char *argv[]) {
 			usleep(2500 * 1000);
 		}
 		for (int retry = 0; retry < 20; retry++) {
-			if (cw.GetTemperature(dev, &t, &timeID) && t != 0.0) { ok = true; break; }
+			if (cw.GetTemperature(dev, &t, &timeID)) { ok = true; break; }
 			if (debug) printf("GetTemperature failed (retry %d)\n", retry);
 			usleep(250 * 1000);
 		}

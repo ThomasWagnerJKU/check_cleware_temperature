@@ -95,14 +95,15 @@ cwOpenCleware(cwSUSBdata *data) {
 		char devname[32] ;
 		int tryNextOne = 0 ;	// if 1 skip current device and try the next one
 
+		// check_cleware_temperature: choose the hiddev directory by whether /dev/usb exists.
+		// Upstream switched to /dev/bus/usb/hiddev (and from index 1 on) whenever
+		// /dev/usb/hiddev0 could not be opened, e.g. a root-only UPS, so a Cleware
+		// device at /dev/usb/hiddev1..15 was never found.
+		if (hId == 0 && i == 0 && access("/dev/usb", F_OK) != 0)
+			hId++ ;
 		sprintf(devname, "%s%d", hiddevname[hId], i) ;
 		data[handleCount].handle = open(devname, O_RDWR) ;
 //			printf("open %s returns %d\n", devname, data[handleCount].handle) ;
-		if (hId == 0 && i == 0 && data[0].handle == INVALID_HANDLE_VALUE) {
-			hId++ ; 	// maybe the hiddev directroy is the wrong one
-			i = 0 ;
-			continue ;
-			}
 		if (data[handleCount].handle >= 0) {
 			ok = ioctl(data[handleCount].handle, HIDIOCGDEVINFO, (void *)&dinfo) ;
 			if (ok < 0)

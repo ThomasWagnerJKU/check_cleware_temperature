@@ -10,7 +10,6 @@ Failed readings (9999.0) are skipped. Diagnostics go to stderr.
 """
 import argparse
 import datetime
-import glob
 import os
 import struct
 import sys
@@ -43,6 +42,12 @@ def read_cwc(path):
             'tmin': tmin, 'tmax': tmax, 'offset': offset, 'records': recs}
 
 
+def num(t):
+    """Value with the sensor's full resolution (0.0625 degC); :g would keep only 6 digits."""
+    s = f'{t:.4f}'.rstrip('0')
+    return s + '0' if s.endswith('.') else s
+
+
 def esc(s, chars):
     for c in '\\' + chars:
         s = s.replace(c, '\\' + c)
@@ -57,10 +62,17 @@ def main():
     ap.add_argument('--tag', action='append', default=[], metavar='K=V', help='tag for line protocol (repeatable)')
     ap.add_argument('--field', default='value', help='field name for line protocol (default: value)')
     a = ap.parse_args()
+    for kv in a.tag:
+        k, eq, v = kv.partition('=')
+        if not k or not eq or not v:
+            ap.error(f"--tag '{kv}': expected K=V with a non-empty key and value")
 
     files = []
     for p in a.paths:
-        files += sorted(glob.glob(os.path.join(p, '*.cwc'))) if os.path.isdir(p) else [p]
+        if os.path.isdir(p):   # files copied from Windows are often *.CWC
+            files += sorted(os.path.join(p, f) for f in os.listdir(p) if f.lower().endswith('.cwc'))
+        else:
+            files.append(p)
     pts, errors = {}, 0
     for p in files:
         try:
@@ -82,7 +94,7 @@ def main():
         out.write('time_utc,unix_time,temperature_degC\n')
         for ts in sorted(pts):
             iso = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            out.write(f'{iso},{ts},{pts[ts]:g}\n')
+            out.write(f'{iso},{ts},{num(pts[ts])}\n')
     else:
         key = esc(a.measurement, ', ')
         for kv in sorted(a.tag):
@@ -90,7 +102,7 @@ def main():
             key += f",{esc(k, ',= ')}={esc(v, ',= ')}"
         field = esc(a.field, ',= ')
         for ts in sorted(pts):
-            out.write(f'{key} {field}={pts[ts]:g} {ts}\n')   # write with precision=s
+            out.write(f'{key} {field}={num(pts[ts])} {ts}\n')   # write with precision=s
 
 
 if __name__ == '__main__':

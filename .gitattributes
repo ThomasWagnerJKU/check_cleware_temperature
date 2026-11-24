@@ -1,2 +1,2 @@
-# Cleware sources are kept byte-identical to the vendor download (CRLF, ISO-8859-1)
+# Cleware sources keep the line endings and encoding of the vendor download (CRLF, ISO-8859-1)
 cleware/** -text -diff
