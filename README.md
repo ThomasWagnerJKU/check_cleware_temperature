@@ -91,5 +91,6 @@ or restart the VM.
 
 ## License
 
-GPL-3.0-or-later, see [LICENSE](LICENSE). The files in [`cleware/`](cleware/) are © Cleware GmbH,
-GPL-3, taken unchanged from `Linux_Ubuntu.zip` (USBaccess 6.6.3, 2023-08-02).
+GPL-3.0-only, see [LICENSE](LICENSE), the same license as Cleware's USBaccess library. The files in
+[`cleware/`](cleware/) are © Cleware GmbH, taken unchanged from `Linux_Ubuntu.zip` (USBaccess 6.6.3,
+2023-08-02).

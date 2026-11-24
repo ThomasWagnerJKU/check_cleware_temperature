@@ -7,7 +7,7 @@
 // check_cleware_temp [-s serial] [-w range] [-c range] [-t timeout] [-d]
 // Ranges use Nagios plugin syntax: [@]start:end, "~" = -infinity, "N" = 0:N.
 //
-// SPDX-License-Identifier: GPL-3.0-or-later (links Cleware's GPL-3 USBaccess)
+// SPDX-License-Identifier: GPL-3.0-only (like Cleware's USBaccess, which it links)
 // Copyright (C) 2026 Thomas Wagner
 
 #include <stdio.h>
